@@ -7,6 +7,7 @@
 
 
 Nfa::Nfa(std::string regex) {
+    bool escape = false;
     head = new NfaNode();
     auto last = head;
     NfaNode *beforeLast = nullptr;
@@ -30,14 +31,16 @@ Nfa::Nfa(std::string regex) {
                 beforeLast->insertEpsilonTransition(last);
                 break;
             case '\\':
+                escape = true;
                 break;
             default:
                 auto epsilonNode = new NfaNode();
                 last->insertEpsilonTransition(epsilonNode);
                 auto newNode = new NfaNode();
-                epsilonNode->insertTransition(c, false, newNode);
+                epsilonNode->insertTransition(c, escape, newNode);
                 beforeLast = last;
                 last = newNode;
+                escape = false;
                 break;
         }
 
