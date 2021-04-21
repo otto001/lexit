@@ -18,6 +18,8 @@ public:
     Nfa(std::string regex);
 protected:
     NfaNode *head{};
+    void eliminateEpsilonTransitions();
+    std::set<NfaNode *> allReachable();
 
 
 public:

@@ -2,7 +2,9 @@
 #include "NFA/Nfa.h"
 
 int main() {
-    Nfa nfa("abc");
+    Nfa nfa("a*b+c?");
+    std::cout << "done" << std::endl;
+
     while (true) {
         std::string input;
         std::cin >> input;
