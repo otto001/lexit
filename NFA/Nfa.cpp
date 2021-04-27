@@ -3,53 +3,96 @@
 //
 
 #include "Nfa.h"
+#include "../util.h"
 #include <algorithm>
 
+std::unordered_set<char> Nfa::escapableCharacter = {'(', ')', '[', ']', '{', '}', '?', '*', '+', '|', '\\'};
 
-Nfa::Nfa(std::string regex) {
-    bool escape = false;
-    head = new NfaNode();
-    auto last = head;
-    NfaNode *beforeLast = nullptr;
-    for (auto c : regex) {
-        switch (c) {
-            case '|':
-                last->setFinal(true);
-                last = head;
-                beforeLast = nullptr;
-                break;
-            case '*':
-                // TODO: error handling for cases like *a
-                last->insertEpsilonTransition(beforeLast);
-                last = beforeLast;
-                beforeLast = nullptr;
-                break;
-            case '+':
-                last->insertEpsilonTransition(beforeLast);
-                break;
-            case '?':
-                beforeLast->insertEpsilonTransition(last);
-                break;
-            case '\\':
-                escape = true;
-                break;
-            default:
-                auto epsilonNode = new NfaNode();
-                last->insertEpsilonTransition(epsilonNode);
-                auto newNode = new NfaNode();
-                epsilonNode->insertTransition(c, escape, newNode);
-                beforeLast = last;
-                last = newNode;
-                escape = false;
-                break;
-        }
 
-    }
-    last->setFinal(true);
+Nfa::Nfa(const std::string &regex) {
+    auto result = buildEpsNfa(regex);
+    head = result.first;
+    finalState = result.second;
+
     eliminateEpsilonTransitions();
 }
 
-bool Nfa::run(std::string runString) {
+Nfa::~Nfa() {
+    auto allNodes = allReachable();
+    for (auto node : allNodes) {
+        delete node;
+    }
+}
+
+std::pair<NfaNode *, NfaNode *> Nfa::buildEpsNfa(const std::string &regex) {
+    bool escape = false;
+
+    auto head = new NfaNode();
+    auto finalState = new NfaNode();
+    finalState->setFinal(true);
+
+    auto last = head;
+    NfaNode *beforeLast = nullptr;
+
+    auto appendSymbol = [&last, &beforeLast, &escape](char c) {
+        auto epsilonNode = new NfaNode();
+        last->insertEpsilonTransition(epsilonNode);
+        auto newNode = new NfaNode();
+        if (escape && escapableCharacter.find(c) != escapableCharacter.end()) {
+            escape = false;
+        }
+        epsilonNode->insertTransition(c, !escape, newNode);
+        beforeLast = last;
+        last = newNode;
+        escape = false;
+    };
+
+    for (auto it = regex.begin(); it != regex.end(); it++) {
+        if (escape) {
+            appendSymbol(*it);
+        } else {
+            switch (*it) {
+                case '(': {
+                    auto bracketContent = extractBracket(it, regex.end()).value();
+                    auto newNfa = buildEpsNfa(bracketContent);
+                    last->insertEpsilonTransition(newNfa.first);
+                    newNfa.second->setFinal(false);
+                    beforeLast = last;
+                    last = newNfa.second;
+                    it += (long) bracketContent.size() + 1;
+                    break;
+                }
+                case '|':
+                    last->insertEpsilonTransition(finalState);
+                    last = head;
+                    beforeLast = nullptr;
+                    break;
+                case '*':
+                    // TODO: error handling for cases like *a
+                    last->insertEpsilonTransition(beforeLast);
+                    last = beforeLast;
+                    beforeLast = nullptr;
+                    break;
+                case '+':
+                    last->insertEpsilonTransition(beforeLast);
+                    break;
+                case '?':
+                    beforeLast->insertEpsilonTransition(last);
+                    break;
+                case '\\':
+                    escape = true;
+                    break;
+                default:
+                    appendSymbol(*it);
+                    break;
+            }
+        }
+    }
+    last->insertEpsilonTransition(finalState);
+    return std::pair<NfaNode *, NfaNode *>(head, finalState);
+}
+
+bool Nfa::run(const std::string &runString) {
     std::set<NfaNode *> current = {head};
     for (auto c : runString) {
         std::set<NfaNode *> next = {};
@@ -91,6 +134,17 @@ void Nfa::eliminateEpsilonTransitions() {
         }
         unprocessedNodes.erase(node);
     }
+
+    auto remaining = allReachable();
+    remaining.insert(finalState);
+    std::vector<NfaNode *> unreachableNodes;
+    std::set_difference(allNodes.begin(), allNodes.end(), remaining.begin(), remaining.end(),
+                        std::inserter(unreachableNodes, unreachableNodes.end()));
+    for (auto node : unreachableNodes) {
+        delete node;
+    }
+    delete finalState;
+    finalState = nullptr;
 }
 
 std::set<NfaNode *> Nfa::allReachable() {
@@ -107,3 +161,6 @@ std::set<NfaNode *> Nfa::allReachable() {
     }
     return reachableNodes;
 }
+
+
+

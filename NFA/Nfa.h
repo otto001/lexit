@@ -9,21 +9,31 @@
 #include "NfaNode.h"
 #include <vector>
 #include <string>
+#include <unordered_set>
 #include "../types.h"
 
 
 class Nfa {
 public:
     Nfa() = default;
-    Nfa(std::string regex);
+
+    Nfa(const std::string &regex);
+    ~Nfa();
+
 protected:
+    static std::unordered_set<char> escapableCharacter;
+    static std::pair<NfaNode*, NfaNode*> buildEpsNfa(const std::string &regex);
+
     NfaNode *head{};
+    NfaNode *finalState{};
+
     void eliminateEpsilonTransitions();
+
     std::set<NfaNode *> allReachable();
 
 
 public:
-    bool run(std::string runString);
+    bool run(const std::string &runString);
 };
 
 

@@ -10,7 +10,7 @@ void NfaNode::insertTransition(Symbol symbol, bool escape, NfaNode *nfaNode) {
     if (symbol == '.') {
         escape = !escape;
     }
-    if (escape) {
+    if (!escape) {
         switch (symbol) {
             case 'w':
                 wordCharacterTransitions.insert(nfaNode);
@@ -34,7 +34,7 @@ void NfaNode::insertTransition(Symbol symbol, bool escape, NfaNode *nfaNode) {
                 wildCardTransitions.insert(nfaNode);
                 break;
             default:
-                throw std::invalid_argument("wrong escapable character");
+                throw std::invalid_argument("invalid escapable character");
         }
     } else {
         auto it = transitions.find(symbol);
