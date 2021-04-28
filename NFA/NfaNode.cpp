@@ -4,7 +4,7 @@
 
 #include "NfaNode.h"
 #include <stdexcept>
-#include <memory>
+#include <algorithm>
 
 void NfaNode::insertTransition(Symbol symbol, bool escape, NfaNode *nfaNode) {
     if (symbol == '.') {
@@ -39,7 +39,7 @@ void NfaNode::insertTransition(Symbol symbol, bool escape, NfaNode *nfaNode) {
     } else {
         auto it = transitions.find(symbol);
         if (it == transitions.end()) {
-            transitions[symbol] = {nfaNode};
+            transitions.insert({symbol, {nfaNode}});
         } else {
             it->second.insert(nfaNode);
         }
@@ -47,46 +47,60 @@ void NfaNode::insertTransition(Symbol symbol, bool escape, NfaNode *nfaNode) {
 }
 
 void NfaNode::insertEpsilonTransition(NfaNode *nfaNode) {
+    if (epsilonInsertionLock) {
+        throw std::domain_error("calling insertEpsilonTransition on a node with epsilonInsertionLock enabled is not supported");
+    }
     epsilonTransitions.insert(nfaNode);
 }
 
 void NfaNode::removeEpsilonTransition(NfaNode *nfaNode) {
+
     epsilonTransitions.erase(nfaNode);
 }
 
 std::set<NfaNode *> NfaNode::next(Symbol symbol) {
-    if (!epsilonTransitions.empty()) {
+    if (!epsilonInsertionLock && !epsilonTransitions.empty()) {
         throw std::domain_error("calling next on a node with epsilon transitions is not supported");
     }
-    std::set<NfaNode *> result;
 
-    if ('0' <= symbol && symbol <= '9') {
-        result.insert(digitCharacterTransitions.begin(), digitCharacterTransitions.end());
-        result.insert(wordCharacterTransitions.begin(), wordCharacterTransitions.end());
-    } else {
-        result.insert(nonDigitCharacterTransitions.begin(), nonDigitCharacterTransitions.end());
-        if (isalpha(symbol) || symbol == '_') {
+    if (hasSpecialTransitions) {
+        std::set<NfaNode *> result;
+
+
+        if ('0' <= symbol && symbol <= '9') {
+            result.insert(digitCharacterTransitions.begin(), digitCharacterTransitions.end());
             result.insert(wordCharacterTransitions.begin(), wordCharacterTransitions.end());
         } else {
-            result.insert(nonWordCharacterTransitions.begin(), nonWordCharacterTransitions.end());
-            if (isspace(symbol)) {
-                result.insert(whitespaceCharacterTransitions.begin(), whitespaceCharacterTransitions.end());
+            result.insert(nonDigitCharacterTransitions.begin(), nonDigitCharacterTransitions.end());
+            if (isalpha(symbol) || symbol == '_') {
+                result.insert(wordCharacterTransitions.begin(), wordCharacterTransitions.end());
             } else {
-                result.insert(nonWhitespaceCharacterTransitions.begin(), nonWhitespaceCharacterTransitions.end());
+                result.insert(nonWordCharacterTransitions.begin(), nonWordCharacterTransitions.end());
+                if (isspace(symbol)) {
+                    result.insert(whitespaceCharacterTransitions.begin(), whitespaceCharacterTransitions.end());
+                } else {
+                    result.insert(nonWhitespaceCharacterTransitions.begin(), nonWhitespaceCharacterTransitions.end());
+                }
             }
         }
-    }
 
-    if (symbol != '\n') {
-        result.insert(wildCardTransitions.begin(), wildCardTransitions.end());
-    }
+        if (symbol != '\n') {
+            result.insert(wildCardTransitions.begin(), wildCardTransitions.end());
+        }
 
-    auto it = transitions.find(symbol);
-    if (it != transitions.end()) {
-        result.insert(it->second.begin(), it->second.end());
-    }
+        auto it = transitions.find(symbol);
+        if (it != transitions.end()) {
+            result.insert(it->second.begin(), it->second.end());
+        }
 
-    return result;
+        return result;
+    } else {
+        auto it = transitions.find(symbol);
+        if (it != transitions.end()) {
+            return it->second;
+        }
+        return {};
+    }
 }
 
 std::set<NfaNode *> NfaNode::getDirectlyReachable() {
@@ -133,13 +147,29 @@ void NfaNode::insertTransitions(NfaNode *other) {
 
         auto it = transitions.find(pair.first);
         if (it == transitions.end()) {
-            transitions[pair.first] = pair.second;
+            transitions.insert(pair);
         } else {
             transitions[pair.first].insert(pair.second.begin(), pair.second.end());
 
         }
 
     }
-
 }
+
+void NfaNode::optimize() {
+    if (!epsilonTransitions.empty()) {
+        throw std::domain_error("cannot optimize a node with epsilon transitions");
+    }
+    std::array<std::set<NfaNode *>*, 7> specialSets = {
+            &wordCharacterTransitions, &nonWordCharacterTransitions,
+            &whitespaceCharacterTransitions, &nonWhitespaceCharacterTransitions,
+            &digitCharacterTransitions, &nonDigitCharacterTransitions,
+            &wildCardTransitions,
+    };
+    hasSpecialTransitions = std::any_of(specialSets.begin(), specialSets.end(), [](std::set<NfaNode *>* set) {
+        return !set->empty();
+    });
+    epsilonInsertionLock = true;
+}
+
 

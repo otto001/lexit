@@ -5,6 +5,7 @@
 #ifndef LEXIT_NFANODE_H
 #define LEXIT_NFANODE_H
 
+#include <map>
 #include <unordered_map>
 #include <set>
 #include <vector>
@@ -22,7 +23,11 @@ protected:
     std::set<NfaNode *> nonWhitespaceCharacterTransitions;
     std::set<NfaNode *> digitCharacterTransitions;
     std::set<NfaNode *> nonDigitCharacterTransitions;
+
     bool final;
+
+    bool hasSpecialTransitions;
+    bool epsilonInsertionLock;
 public:
     void insertTransition(Symbol, bool, NfaNode *);
     void insertTransitions(NfaNode *);
@@ -30,12 +35,14 @@ public:
     void insertEpsilonTransition(NfaNode *);
     void removeEpsilonTransition(NfaNode *);
 
+    void optimize();
 
     std::set<NfaNode *> next(Symbol symbol);
+
     bool isFinal() const { return final; };
     void setFinal(bool final) {this->final = final;}
-    std::set<NfaNode *> getDirectlyReachable();
 
+    std::set<NfaNode *> getDirectlyReachable();
     const std::set<NfaNode *> &getDirectlyEpsilonReachable() const;
 };
 

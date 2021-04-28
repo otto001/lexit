@@ -93,25 +93,26 @@ std::pair<NfaNode *, NfaNode *> Nfa::buildEpsNfa(const std::string &regex) {
 }
 
 bool Nfa::run(const std::string &runString) {
-    std::set<NfaNode *> current = {head};
+    std::set<NfaNode *> currentNodes = {head};
     for (auto c : runString) {
-        std::set<NfaNode *> next = {};
-        for (auto cur : current) {
-            for (auto node : cur->next(c)) {
-                next.insert(node);
+        size_t currentNodesSize = currentNodes.size();
+        if (currentNodesSize > 1) {
+            std::set<NfaNode *> nextNodes = {};
+            for (auto currentNode : currentNodes) {
+                auto nextOfNode = currentNode->next(c);
+                nextNodes.insert(nextOfNode.begin(), nextOfNode.end());
             }
-        }
-        current = next;
-        if (current.empty()) {
+            currentNodes = nextNodes;
+        } else if (currentNodesSize == 1) {
+            currentNodes = (*currentNodes.begin())->next(c);
+        } else {
             return false;
         }
     }
-    for (auto c : current) {
-        if (c->isFinal()) {
-            return true;
-        }
-    }
-    return false;
+
+    return std::any_of(currentNodes.begin(), currentNodes.end(), [](NfaNode* elem) {
+        return elem->isFinal();
+    });
 }
 
 void Nfa::eliminateEpsilonTransitions() {
@@ -135,6 +136,8 @@ void Nfa::eliminateEpsilonTransitions() {
         unprocessedNodes.erase(node);
     }
 
+
+    // collecting garbage
     auto remaining = allReachable();
     remaining.insert(finalState);
     std::vector<NfaNode *> unreachableNodes;
@@ -145,6 +148,11 @@ void Nfa::eliminateEpsilonTransitions() {
     }
     delete finalState;
     finalState = nullptr;
+
+    for (auto node : remaining) {
+        node->optimize();
+    }
+
 }
 
 std::set<NfaNode *> Nfa::allReachable() {

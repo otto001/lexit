@@ -7,6 +7,8 @@
 
 #include <string>
 #include <algorithm>
+#include <stdexcept>
+
 
 std::optional<std::string> extractBracket(std::string::const_iterator begin, std::string::const_iterator end) {
     size_t bracketCount = 0;
